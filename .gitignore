@@ -1,0 +1,31 @@
+# Secrets and local configuration
+_authinfo
+_saspy_runtime_cfg.py
+studio_settings.json
+.env
+.env.*
+!_authinfo_example
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+# Local execution outputs
+logs/
+outputs/
+*.log
+*.lst
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+# Python packaging
+build/
+dist/
+*.egg-info/
+
+# SAS temporary datasets
+*.sas7bdat
+*.sas7bcat
