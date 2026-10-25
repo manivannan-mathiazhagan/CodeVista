@@ -12,12 +12,15 @@
 ### Programmed By:  Manivannan Mathialagan                                  ###
 ### Created On:     10Oct2026                                               ###
 ###-------------------------------------------------------------------------###
-### Process:        Connect to SAS ODA and run user-written SAS programs.  ###
+### Process:        1. Launch CodeVista desktop IDE using PySide6.          ###
+###                 2. Connect to SAS OnDemand through SASPy.               ###
+###                 3. Initialize the remote SAS workspace and libraries.   ###
+###                 4. Load AUTOEXEC, global macros and study macros.       ###
 ###                 5. Open and edit SAS programs with syntax highlighting. ###
 ###                 6. Execute selected code or complete SAS programs.      ###
 ###                 7. Display execution logs and results in the IDE.       ###
 ###                 8. Browse SAS libraries, datasets and variables.        ###
-###                 9. Support SAS Packages Framework (SPF) utilities.       ###
+###                 9. Support SAS Packages Framework (SPF) and ADAMSKI.    ###
 ###                10. Manage outputs and terminate the SAS session.        ###
 ###-------------------------------------------------------------------------###
 ### Security:       SAS OnDemand credentials are read from the private      ###
@@ -42,7 +45,6 @@
 ### Change History:                                                         ###
 ### 1.0       10Oct2026    Initial development of CodeVista SAS IDE.        ###
 ### 2.0       20Oct2026    Dynamic libraries and configured local storage.  ###
-### 2.1       20Oct2026    Per-program output directories.               ###
 ###                                                                         ###
 ###-------------------------------------------------------------------------###
 from __future__ import annotations
