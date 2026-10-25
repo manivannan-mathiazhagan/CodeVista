@@ -1,3 +1,4 @@
+
 {
     "config_name": "oda",
     "region": "AP1",
@@ -7,5 +8,10 @@
     "authkey": "oda",
     "authinfo": "_authinfo",
     "encoding": "utf-8",
-    "global_utils": "D:\\Work\\MyGithub\\systems-nexus\\global_utils"
+    "global_utils": "D:\\Work\\MyGithub\\systems-nexus\\global_utils",
+    "local_paths": {
+        "logs": "D:\\CodeVista\\Logs",
+        "results": "D:\\CodeVista\\Results",
+        "files": "D:\\CodeVista\\Files"
+    }
 }
