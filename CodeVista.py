@@ -78,7 +78,7 @@ class SasHighlighter(QSyntaxHighlighter):
             self.rules.append((QRegularExpression(pattern), fmt))
         add(r'\b(?:data|set|merge|if|then|else|do|end|run|quit|proc|sql|select|from|where|by|retain|length|format|informat|array|output|keep|drop|rename|libname|filename|options|title|footnote|ods|class|var|table|tables|input|datalines|cards|call|put|attrib)\b', '#569cd6', True)
         add(r'%[A-Za-z_][A-Za-z_0-9]*', '#c586c0')
-        add(r'&[A-Za-z_][A-Za-z_0-9]*\.?', '#dcdcaa')
+        add(r'&[A-Za-z_][A-Za-z_0-9]*(?:\.[A-Za-z_0-9]+)?', '#dcdcaa')
         add(r'\b\d+(?:\.\d+)?\b', '#b5cea8')
         add(r"\"(?:[^\"\\]|\\.)*\"|'(?:[^'\\]|\\.)*'", '#ce9178')
         add(r'/\*[\s\S]*?\*/|\*[^;\n]*;', '#6a9955')
@@ -183,25 +183,21 @@ options notes source;"""
                 if name:
                     names.add(name)
         return names
-
     def _download_outputs(self, before, code, paths):
         after = self._remote_inventory()
         allowed = {'.xlsx', '.xls', '.csv', '.xpt', '.pdf', '.rtf',
                    '.html', '.htm', '.txt', '.json', '.xml', '.zip'}
         candidates = set(after - before)
-
         # A workbook can be rewritten using the SAME filename on subsequent runs.
         # Detect explicitly referenced files even if they existed before execution.
         code_lower = code.lower()
         for name in after:
             if name.lower() in code_lower:
                 candidates.add(name)
-
         # The standard validation workbook is generated via LIBNAME XLSX and may
         # not be referenced by its full filename in the program text.
         # Capture XLSX files in the remote workspace on every run.
         candidates.update(name for name in after if name.lower().endswith('.xlsx'))
-
         downloaded = []
         for name in sorted(candidates):
             if Path(name).name != name or Path(name).suffix.lower() not in allowed:
@@ -217,7 +213,6 @@ options notes source;"""
             downloaded.append(str(target))
             self.upload_cache.pop(name, None)
         return downloaded
-
     def _execution_paths(self, directive):
         if not directive:
             return self.local_paths
@@ -261,7 +256,7 @@ options notes source;"""
             import saspy
             if workdir:
                 os.chdir(workdir)  # resolves relative _authinfo for configurations that use it
-            config = json.loads(Path(cfgfile).read_text(encoding='utf-8'))
+            config = json.loads(Path(cfgfile).read_text(encoding='utf-8-sig'))
             self._setup_storage(config)
             required = ['java_path', 'iom_host', 'iom_port', 'authkey', 'authinfo']
             missing = [k for k in required if not config.get(k)]
@@ -432,6 +427,11 @@ class SettingsDialog(QDialog):
         form.addRow(buttons)
     def values(self):
         return {'config_path': self.config_path.text().strip()}
+def spreadsheet_cell(value):
+    item = QTableWidgetItem(str(value) if value is not None else '')
+    item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+    return item
+
 class MaximizedDatasetViewer(QDialog):
     """Independent, maximized read-only viewer for a remote SAS dataset."""
     def __init__(self, name, columns, rows, message, parent=None):
@@ -442,7 +442,7 @@ class MaximizedDatasetViewer(QDialog):
         layout = QVBoxLayout(self)
         top = QHBoxLayout()
         title = QLabel(f'{name}  |  {len(rows):,} rows loaded  |  {len(columns)} variables')
-        title.setStyleSheet('font-size: 13pt; font-weight: bold; color: #174a78;')
+        title.setStyleSheet('font-family: Segoe UI; font-size: 14pt; font-weight: bold; color: #174a78;')
         top.addWidget(title)
         top.addStretch()
         restore = QPushButton('Restore Window')
@@ -455,23 +455,36 @@ class MaximizedDatasetViewer(QDialog):
         self.table = QTableWidget()
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.table.setAlternatingRowColors(True)
+        self.table.setFont(QFont('Times New Roman', 11))
+        self.table.verticalHeader().setDefaultSectionSize(27)
+        self.table.verticalHeader().setVisible(True)
+        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.table.setWordWrap(False)
+        self.table.setShowGrid(True)
+        self.table.horizontalHeader().setDefaultSectionSize(155)
         self.table.setSortingEnabled(False)
         self.table.setColumnCount(len(columns))
         self.table.setHorizontalHeaderLabels(columns)
         self.table.setRowCount(len(rows))
+        self.table.setVerticalHeaderLabels([str(i + 1) for i in range(len(rows))])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         for r, values in enumerate(rows):
             for c, value in enumerate(values):
-                self.table.setItem(r, c, QTableWidgetItem(value))
+                self.table.setItem(r, c, spreadsheet_cell(value))
         self.table.setSortingEnabled(True)
         layout.addWidget(self.table)
         foot = QLabel(f'{message} — Data loaded from the active SAS ODA session. Read-only preview.')
         foot.setStyleSheet('color: #526779;')
         layout.addWidget(foot)
         self.setStyleSheet('''
-            QDialog { background: #F4F7FA; font-family: 'Segoe UI'; }
-            QTableWidget { background: white; alternate-background-color: #edf6ff;
-                gridline-color: #dbe8f4; selection-background-color: #91c9fa; }
+            QDialog { background: #F4F7FA; font-family: 'Times New Roman'; }
+            QTableWidget { background: white; alternate-background-color: #F3F7FB;
+                gridline-color: #DCE5EB; selection-background-color: #D4E8FB;
+                selection-color: #16344D; border: 1px solid #D8E2EC; border-radius: 9px; }
+            QHeaderView::section { background: #E4EDF5; color: #26425A;
+                font-family: 'Times New Roman'; font-size: 11pt; font-weight: bold;
+                border-right: 1px solid #D5E0EB; padding: 8px; }
+            QTableWidget::item { padding: 3px 9px; }
             QPushButton { background: #316B9E; color: white; border: none;
                 border-radius: 8px; padding: 9px 16px; font-weight: bold; }
             QPushButton:hover { background: #23577F; }
@@ -484,7 +497,7 @@ class Studio(QMainWindow):
     request_dataset = Signal(str, str)
     def __init__(self):
         super().__init__()
-        self.setWindowTitle('CodeVista — SAS ODA IDE')
+        self.setWindowTitle('CodeVista')
         self.resize(1450, 900)
         self.setMinimumSize(850, 560)
         self.settings_path = DEFAULT_SETTINGS
@@ -492,6 +505,7 @@ class Studio(QMainWindow):
         self.paths = {}
         self.is_connected = False
         self.is_busy = False
+        self.is_disconnecting = False
         self.pending_library_refresh = False
         self.dataset_windows = []
         self.thread = QThread(self)
@@ -523,45 +537,119 @@ class Studio(QMainWindow):
         self.output.setObjectName('outputTabs')
         self.output.addTab(self.log, 'LOG')
         self.output.addTab(self.results, 'RESULTS (HTML)')
+        self.btn_clear_output = QPushButton('Clear Log')
+        self.btn_clear_output.setObjectName('clearOutputBtn')
+        self.btn_clear_output.setToolTip('Clear the currently visible output panel')
+        self.btn_clear_output.clicked.connect(self.clear_active_output)
+        self.output.setCornerWidget(self.btn_clear_output, Qt.Corner.TopRightCorner)
+        self.output.currentChanged.connect(self.update_clear_output_button)
         self.library_tree = QTreeWidget()
-        self.library_tree.setHeaderLabels(['SAS Libraries / Datasets'])
+        self.library_tree.setHeaderLabels(['LIBRARY / DATASET'])
+        self.library_tree.setFont(QFont('Times New Roman', 12))
+        self.library_tree.setIndentation(18)
+        self.library_tree.setUniformRowHeights(True)
+        self.library_tree.setAnimated(True)
+        self.library_tree.header().setStretchLastSection(True)
         self.library_tree.itemDoubleClicked.connect(self.open_dataset)
         self.dataset_table = QTableWidget()
         self.dataset_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.dataset_table.setAlternatingRowColors(True)
+        self.dataset_table.setFont(QFont('Times New Roman', 11))
+        self.dataset_table.verticalHeader().setDefaultSectionSize(27)
+        self.dataset_table.verticalHeader().setVisible(True)
+        self.dataset_table.verticalHeader().setDefaultAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.dataset_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.dataset_table.setSelectionMode(QTableWidget.SelectionMode.ExtendedSelection)
+        self.dataset_table.setWordWrap(False)
+        self.dataset_table.setShowGrid(True)
+        self.dataset_table.horizontalHeader().setMinimumSectionSize(90)
+        self.dataset_table.horizontalHeader().setDefaultSectionSize(145)
         self.dataset_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         self.dataset_table.setMinimumHeight(120)
         self.data_tabs = QTabWidget()
         self.data_tabs.setObjectName('dataTabs')
         self.data_tabs.addTab(self.library_tree, 'LIBRARIES')
         self.data_tabs.addTab(self.dataset_table, 'DATASET VIEWER')
-        self.data_tabs.setMinimumWidth(280)
+        self.data_tabs.setMinimumWidth(0)
+        # Packager-inspired individual rounded panels with prominent section headings.
+        def panel(title, content, object_name):
+            frame = QFrame()
+            frame.setObjectName('studioPanel')
+            frame.setProperty('panelRole', object_name)
+            frame_layout = QVBoxLayout(frame)
+            frame_layout.setContentsMargins(8, 8, 8, 8)
+            frame_layout.setSpacing(6)
+            heading = QLabel(title)
+            heading.setObjectName('panelHeading')
+            heading.setProperty('panelRole', object_name)
+            heading.setMinimumHeight(31)
+            heading.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+            frame_layout.addWidget(heading)
+            frame_layout.addWidget(content, 1)
+            return frame
+
+        library_panel = panel('  SAS LIBRARY & DATASET VIEWER', self.data_tabs, 'library')
+        editor_panel = panel('  SAS PROGRAM EDITOR', self.editors, 'editor')
+        output_panel = panel('  SAS LOG & RESULTS', self.output, 'output')
+        self.library_panel = library_panel
+        self.browser_last_width = 325
+        # Toggle controls are part of the panel headers; no extra menu required.
+        browser_heading = library_panel.findChild(QLabel, 'panelHeading')
+        browser_header = QHBoxLayout()
+        browser_header.setContentsMargins(0, 0, 0, 0)
+        browser_header.setSpacing(4)
+        library_layout = library_panel.layout()
+        library_layout.removeWidget(browser_heading)
+        browser_header.addWidget(browser_heading, 1)
+        self.btn_hide_browser = QPushButton('Hide  ◀')
+        self.btn_hide_browser.setObjectName('panelToggleBtn')
+        self.btn_hide_browser.setToolTip('Hide libraries and dataset viewer (Ctrl+B)')
+        self.btn_hide_browser.clicked.connect(self.toggle_browser)
+        browser_header.addWidget(self.btn_hide_browser)
+        library_layout.insertLayout(0, browser_header)
+        editor_heading = editor_panel.findChild(QLabel, 'panelHeading')
+        editor_header = QHBoxLayout()
+        editor_header.setContentsMargins(0, 0, 0, 0)
+        editor_header.setSpacing(4)
+        editor_layout = editor_panel.layout()
+        editor_layout.removeWidget(editor_heading)
+        editor_header.addWidget(editor_heading, 1)
+        self.btn_show_browser = QPushButton('▶  Show Libraries / Datasets')
+        self.btn_show_browser.setObjectName('panelToggleBtn')
+        self.btn_show_browser.setToolTip('Show libraries and dataset viewer (Ctrl+B)')
+        self.btn_show_browser.clicked.connect(self.toggle_browser)
+        self.btn_show_browser.hide()
+        editor_header.addWidget(self.btn_show_browser)
+        editor_layout.insertLayout(0, editor_header)
+        library_panel.setMinimumWidth(0)
         editor_split = QSplitter(Qt.Orientation.Horizontal)
         editor_split.setChildrenCollapsible(False)
-        editor_split.setHandleWidth(7)
-        editor_split.addWidget(self.data_tabs)
-        editor_split.addWidget(self.editors)
-        editor_split.setSizes([300, 950])
+        editor_split.setHandleWidth(9)
+        editor_split.addWidget(library_panel)
+        editor_split.addWidget(editor_panel)
+        editor_split.setSizes([325, 975])
         splitter = QSplitter(Qt.Orientation.Vertical)
         splitter.setChildrenCollapsible(False)
-        splitter.setHandleWidth(7)
-        splitter.addWidget(editor_split); splitter.addWidget(self.output)
-        splitter.setSizes([540, 260])
+        splitter.setHandleWidth(9)
+        splitter.addWidget(editor_split)
+        splitter.addWidget(output_panel)
+        splitter.setSizes([570, 240])
         # Header and IDE body share the central layout, retaining both resizable splitters.
         self.header = QFrame()
         self.header.setObjectName('brandHeader')
-        self.header.setFixedHeight(78)
+        self.header.setFixedHeight(82)
         header_layout = QVBoxLayout(self.header)
         header_layout.setContentsMargins(12, 7, 12, 7)
         header_layout.setSpacing(1)
-        brand = QLabel('CodeVista')
+        brand = QLabel('CodeVista — SAS Programming Environment')
         brand.setObjectName('brandTitle')
         brand.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        subtitle = QLabel('SAS Programming Environment  |  Powered by SASPy')
+        subtitle = QLabel('For queries, contact Manivannan (manivannan.mathi@outlook.com)')
         subtitle.setObjectName('brandSubtitle')
         subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
         header_layout.addWidget(brand)
         header_layout.addWidget(subtitle)
+        subtitle.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         central = QWidget()
         central.setObjectName('centralSurface')
         central_layout = QVBoxLayout(central)
@@ -570,8 +658,13 @@ class Studio(QMainWindow):
         central_layout.addWidget(self.header)
         central_layout.addWidget(splitter, 1)
         self.setCentralWidget(central)
+        self.central_layout = central_layout
         self.main_splitter = splitter
         self.editor_splitter = editor_split
+        self.browser_shortcut = QAction('Toggle Libraries and Dataset Viewer', self)
+        self.browser_shortcut.setShortcut(QKeySequence('Ctrl+B'))
+        self.browser_shortcut.triggered.connect(self.toggle_browser)
+        self.addAction(self.browser_shortcut)
         self.setStatusBar(QStatusBar())
         self.connection_label = QLabel('●  DISCONNECTED')
         self.connection_label.setObjectName('connectionIndicator')
@@ -583,52 +676,45 @@ class Studio(QMainWindow):
     def load_settings(self):
         return {'config_path': str(DEFAULT_SETTINGS)}
     def create_actions(self):
-        file_menu = self.menuBar().addMenu('&File')
-        session_menu = self.menuBar().addMenu('&Session')
-        run_menu = self.menuBar().addMenu('&Run')
+        # All commands are available through toolbar/panels; shortcuts remain active.
+        self.menuBar().hide()
         toolbar = QToolBar('Main')
         toolbar.setObjectName('mainToolbar')
         toolbar.setMovable(False)
         toolbar.setFloatable(False)
-        toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        self.addToolBar(toolbar)
-        def action(menu, title, shortcut, fn, tool=True):
-            a = QAction(title, self)
-            if shortcut: a.setShortcut(QKeySequence(shortcut))
-            a.triggered.connect(fn)
-            menu.addAction(a)
-            if tool: toolbar.addAction(a)
-            return a
-        action(file_menu, 'New', 'Ctrl+N', self.new_file)
-        action(file_menu, 'Open...', 'Ctrl+O', self.open_file)
-        action(file_menu, 'Save', 'Ctrl+S', self.save_file)
-        action(file_menu, 'Save As...', 'Ctrl+Shift+S', self.save_as, False)
-        toolbar.addSeparator()
-        action(session_menu, 'Settings...', None, self.edit_settings, False)
-        self.connect_action = action(session_menu, 'Connect ODA', None, self.connect_oda)
-        self.disconnect_action = action(session_menu, 'Disconnect', None, self.disconnect_oda)
-        toolbar.addSeparator()
-        self.selection_action = action(run_menu, 'Run Selection', 'F8', self.run_selection)
-        self.all_action = action(run_menu, 'Run All', 'F5', self.run_all)
-        toolbar.addSeparator()
-        self.refresh_action = action(session_menu, 'Refresh Libraries', 'F6', self.refresh_libraries)
-        self.refresh_action.setEnabled(False)
-        # Colored toolbar controls keep the original QAction keyboard shortcuts.
-        toolbar.clear()
+        # Place actions directly below the title banner, inside the central layout.
+        self.central_layout.insertWidget(1, toolbar)
+
+        def shortcut(title, keys, callback):
+            act = QAction(title, self)
+            act.setShortcut(QKeySequence(keys))
+            act.triggered.connect(callback)
+            self.addAction(act)
+            return act
+
+        shortcut('New', 'Ctrl+N', self.new_file)
+        shortcut('Open', 'Ctrl+O', self.open_file)
+        shortcut('Save', 'Ctrl+S', self.save_file)
+        shortcut('Save As', 'Ctrl+Shift+S', self.save_as)
+        shortcut('Run Selection', 'F8', self.run_selection)
+        shortcut('Run All', 'F5', self.run_all)
+        shortcut('Run Selection or All', 'Ctrl+Return', self.run_auto)
+        shortcut('Refresh Libraries', 'F6', self.refresh_libraries)
+
         def colored(text, fn, color, name):
             btn = QPushButton(text)
             btn.setObjectName(name)
             btn.setProperty('accent', color)
             btn.setMinimumHeight(36)
-            btn.setMinimumWidth(82)
-            btn.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.clicked.connect(fn)
             toolbar.addWidget(btn)
             return btn
+
         self.btn_new = colored('New', self.new_file, 'blue', 'newBtn')
         self.btn_open = colored('Open', self.open_file, 'blue', 'openBtn')
         self.btn_save = colored('Save', self.save_file, 'teal', 'saveBtn')
+        self.btn_save_as = colored('Save As', self.save_as, 'teal', 'saveAsBtn')
         toolbar.addSeparator()
         self.btn_connect = colored('Connect ODA', self.connect_oda, 'green', 'connectBtn')
         self.btn_disconnect = colored('Disconnect', self.disconnect_oda, 'red', 'disconnectBtn')
@@ -636,13 +722,31 @@ class Studio(QMainWindow):
         self.btn_selection = colored('Run Selection', self.run_selection, 'purple', 'selectionBtn')
         self.btn_all = colored('Run All', self.run_all, 'orange', 'allBtn')
         self.btn_refresh = colored('Refresh Libraries', self.refresh_libraries, 'teal', 'refreshBtn')
-        action(run_menu, 'Run Selection or All', 'Ctrl+Return', self.run_auto, False)
-        action(run_menu, 'Clear Log', None, self.log.clear, False)
-        action(run_menu, 'Clear Results', None, self.results.clear, False)
-        self.disconnect_action.setEnabled(False)
-        self.selection_action.setEnabled(False)
-        self.all_action.setEnabled(False)
         self.update_controls()
+
+    def toggle_browser(self):
+        if self.library_panel.isVisible():
+            self.browser_last_width = max(280, self.editor_splitter.sizes()[0])
+            self.library_panel.hide()
+            self.btn_show_browser.show()
+            self.statusBar().showMessage('Libraries / Dataset Viewer hidden — Ctrl+B to show')
+        else:
+            self.library_panel.show()
+            self.btn_show_browser.hide()
+            total = max(sum(self.editor_splitter.sizes()), 900)
+            width = min(self.browser_last_width, max(280, total - 400))
+            self.editor_splitter.setSizes([width, max(400, total - width)])
+            self.statusBar().showMessage('Libraries / Dataset Viewer visible')
+
+    def clear_active_output(self):
+        if self.output.currentIndex() == 0:
+            self.log.clear()
+        else:
+            self.results.clear()
+
+    def update_clear_output_button(self, index):
+        self.btn_clear_output.setText('Clear Log' if index == 0 else 'Clear Results')
+
     def new_file(self):
         editor = CodeEditor()
         idx = self.editors.addTab(editor, 'Untitled.sas')
@@ -720,7 +824,7 @@ class Studio(QMainWindow):
             self.on_failed('Configuration', f'Configuration file not found: {path}')
             return
         try:
-            config = json.loads(path.read_text(encoding='utf-8'))
+            config = json.loads(path.read_text(encoding='utf-8-sig'))
             cfgname = config.get('config_name', 'oda')
         except Exception as exc:
             self.on_failed('Configuration', str(exc))
@@ -731,30 +835,31 @@ class Studio(QMainWindow):
         self.btn_connect.setEnabled(False)
         self.request_connect.emit(cfgname, str(path), str(path.parent))
     def disconnect_oda(self):
+        if not self.is_connected or self.is_busy or self.is_disconnecting:
+            return
+        self.is_disconnecting = True
+        self.connection_label.setText('●  DISCONNECTING…')
+        self.connection_label.setStyleSheet('color: #b7791f; font-weight: bold;')
+        self.statusBar().showMessage('Disconnecting SAS ODA session...')
+        self.update_controls()
         self.request_close.emit()
     def on_connected(self, msg):
         self.is_connected = True
         self.statusBar().showMessage(msg)
-        self.connect_action.setEnabled(False)
-        self.disconnect_action.setEnabled(True)
-        self.selection_action.setEnabled(True)
-        self.all_action.setEnabled(True)
         self.connection_label.setText('●  SAS ODA CONNECTED')
         self.connection_label.setStyleSheet('color: #15803d; font-weight: bold;')
         self.update_controls()
         self.pending_library_refresh = True
     def on_disconnected(self, msg):
+        self.is_disconnecting = False
         self.is_connected = False
         self.statusBar().showMessage(msg)
-        self.connect_action.setEnabled(True)
-        self.disconnect_action.setEnabled(False)
-        self.selection_action.setEnabled(False)
-        self.all_action.setEnabled(False)
         self.connection_label.setText('●  DISCONNECTED')
         self.connection_label.setStyleSheet('color: #dc3545; font-weight: bold;')
         self.update_controls()
         self.library_tree.clear()
     def on_session_lost(self, detail):
+        self.is_disconnecting = False
         self.pending_library_refresh = False
         self.is_connected = False
         self.library_tree.clear()
@@ -766,13 +871,12 @@ class Studio(QMainWindow):
         self.update_controls()
     def on_busy(self, busy):
         self.is_busy = busy
-        self.connect_action.setEnabled(not busy and not self.is_connected)
-        self.disconnect_action.setEnabled(not busy and self.is_connected)
-        self.selection_action.setEnabled(not busy and self.is_connected)
-        self.all_action.setEnabled(not busy and self.is_connected)
         self.update_controls()
         if busy:
-            self.statusBar().showMessage('SAS ODA: working...')
+            if self.is_disconnecting:
+                self.statusBar().showMessage('Disconnecting SAS ODA session...')
+            else:
+                self.statusBar().showMessage('SAS ODA: working...')
         elif self.pending_library_refresh and self.is_connected:
             self.pending_library_refresh = False
             self.refresh_libraries()
@@ -802,7 +906,7 @@ class Studio(QMainWindow):
         editor = self.current_editor()
         full_text = editor.toPlainText() if editor else code
         directives = re.findall(
-            r'(?im)^\s*(?:/\*\s*)?CODEVISTA_OUTPUT_DIR\s*:\s*([^\r\n*]+)',
+            r'(?im)^\s*(?:/\*\s*|\*\s*)?CODEVISTA_OUTPUT_DIR\s*:\s*([^\r\n*]+)',
             full_text
         )
         if len(directives) > 1:
@@ -815,7 +919,7 @@ class Studio(QMainWindow):
         elif directive:
             # Use the macro folder name when the editor has not been saved yet.
             # Saving the SAS file gives logs/results its exact filename instead.
-            macro_folder = Path(directive.replace('\\', '/').rstrip('/')).name
+            macro_folder = Path(directive.replace('\\\\', '/').rstrip('/')).name
             program_name = 'test_' + macro_folder if macro_folder else 'Untitled'
         else:
             program_name = 'Untitled'
@@ -833,6 +937,11 @@ class Studio(QMainWindow):
         self.log.setPlainText(f'{label} failed:\n{message}')
         self.output.setCurrentIndex(0)
         self.statusBar().showMessage(f'{label} failed — see LOG')
+        if label == 'Disconnect':
+            self.is_disconnecting = False
+            self.connection_label.setText('●  DISCONNECT FAILED')
+            self.connection_label.setStyleSheet('color: #dc3545; font-weight: bold;')
+            self.update_controls()
         if label == 'Connection':
             self.pending_library_refresh = False
             self.connection_label.setText('●  CONNECTION FAILED')
@@ -840,27 +949,35 @@ class Studio(QMainWindow):
             self.btn_connect.setText('Connect ODA')
             self.btn_connect.setEnabled(True)
     def update_controls(self):
-        ready = self.is_connected and not self.is_busy
-        self.btn_connect.setEnabled(not self.is_connected and not self.is_busy)
-        self.btn_connect.setText('SAS Connected' if self.is_connected else 'Connect ODA')
+        ready = self.is_connected and not self.is_busy and not self.is_disconnecting
+        self.btn_connect.setEnabled(not self.is_connected and not self.is_busy and not self.is_disconnecting)
+        self.btn_connect.setText('Connect ODA')
         self.btn_connect.setProperty('connectionState', 'connected' if self.is_connected else 'disconnected')
         self.btn_connect.style().unpolish(self.btn_connect)
         self.btn_connect.style().polish(self.btn_connect)
         self.btn_disconnect.setEnabled(ready)
+        self.btn_disconnect.setText("Disconnecting…" if self.is_disconnecting else "Disconnect")
         self.btn_selection.setEnabled(ready)
         self.btn_all.setEnabled(ready)
         self.btn_refresh.setEnabled(ready)
-        self.refresh_action.setEnabled(ready)
     def apply_theme(self):
         """Unified professional palette inspired by the TLF Packager."""
         self.setStyleSheet("""
             QMainWindow, QWidget#centralSurface {
                 background: #F4F7FA; color: #213547;
-                font-family: 'Segoe UI'; font-size: 10pt;
+                font-family: 'Times New Roman'; font-size: 11pt;
             }
-            QFrame#brandHeader { background: #B7E5E8; border-radius: 15px; }
-            QLabel#brandTitle { color: #12374A; font-size: 23pt; font-weight: 750; }
-            QLabel#brandSubtitle { color: #365F6B; font-size: 9pt; }
+            QFrame#brandHeader { background: #B3E3E7; border-radius: 16px; }
+            QFrame#studioPanel { background: #F8FBFF; border: 1px solid #B8C2D0; border-radius: 14px; }
+            QLabel#panelHeading {
+                background: #B8C2D0; color: #213547; border: none; border-radius: 9px;
+                padding: 5px 12px; font-family: 'Times New Roman'; font-size: 12pt; font-weight: bold;
+            }
+            QLabel#panelHeading[panelRole="editor"] { background: #B3E3E7; }
+            QLabel#panelHeading[panelRole="output"] { background: #D6E6FA; }
+
+            QLabel#brandTitle { color: #12374A; font-family: 'Times New Roman'; font-size: 21pt; font-weight: 700; }
+            QLabel#brandSubtitle { color: #284A57; font-family: 'Times New Roman'; font-size: 11pt; }
             QMenuBar { background: #FFFFFF; color: #213547; padding: 4px; }
             QMenuBar::item:selected, QMenu::item:selected { background: #D8EEF2; }
             QMenu { background: #FFFFFF; border: 1px solid #CFDCE7; padding: 5px; }
@@ -871,49 +988,70 @@ class Studio(QMainWindow):
             QToolBar::separator { background: #CAD7E1; width: 1px; margin: 5px 7px; }
             QPushButton {
                 background: #316B9E; color: #FFFFFF; border: none;
-                border-radius: 9px; padding: 8px 12px; font-weight: 600;
+                border-radius: 10px; padding: 7px 16px; font-family: 'Times New Roman'; font-size: 11pt; font-weight: bold;
             }
             QPushButton:hover { background: #23577F; }
             QPushButton:pressed { background: #184261; }
             QPushButton:disabled { background: #E0E5EA; color: #9AA5B0; }
-            QPushButton#newBtn, QPushButton#openBtn { background: #5279AD; }
-            QPushButton#newBtn:hover, QPushButton#openBtn:hover { background: #385E91; }
-            QPushButton#saveBtn, QPushButton#refreshBtn { background: #258F9D; }
-            QPushButton#saveBtn:hover, QPushButton#refreshBtn:hover { background: #1B7380; }
-            QPushButton#connectBtn { background: #258A64; }
-            QPushButton#connectBtn:hover { background: #1D7051; }
+            QPushButton#newBtn, QPushButton#openBtn { background: #B3C6E7; color: #222222; }
+            QPushButton#newBtn:hover, QPushButton#openBtn:hover { background: #D5DEEF; }
+            QPushButton#saveBtn, QPushButton#saveAsBtn { background: #33B9B2; color: white; }
+            QPushButton#refreshBtn { background: #AD7DFC; color: white; }
+            QPushButton#saveBtn:hover, QPushButton#saveAsBtn:hover { background: #4EDDD7; }
+            QPushButton#refreshBtn:hover { background: #C7A2FD; }
+            QPushButton#connectBtn { background: #71C95E; color: #173B1B; }
+            QPushButton#clearOutputBtn { background: #E6EDF3; color: #34536A; border: 1px solid #CEDBE5; padding: 5px 11px; border-radius: 7px; }
+            QPushButton#clearOutputBtn:hover { background: #D6E4ED; }
+            QPushButton#connectBtn:hover { background: #98EB84; }
             QPushButton#connectBtn[connectionState="connected"]:disabled {
                 background: #D8F0E4; color: #18774E;
             }
-            QPushButton#disconnectBtn { background: #C94C57; }
-            QPushButton#disconnectBtn:hover { background: #AA3541; }
-            QPushButton#selectionBtn, QPushButton#allBtn { background: #256C99; }
-            QPushButton#selectionBtn:hover, QPushButton#allBtn:hover { background: #1C5477; }
+            QPushButton#disconnectBtn { background: #F14B4B; }
+            QPushButton#disconnectBtn:hover { background: #F98A8A; }
+            QPushButton#selectionBtn { background: #AD7DFC; color: white; }
+            QPushButton#allBtn { background: #FF9933; color: #222; }
+            QPushButton#selectionBtn:hover { background: #C7A2FD; }
+            QPushButton#allBtn:hover { background: #FFBC80; }
             QPushButton#disconnectBtn:disabled, QPushButton#selectionBtn:disabled,
             QPushButton#allBtn:disabled, QPushButton#refreshBtn:disabled {
                 background: #E0E5EA; color: #9AA5B0;
             }
             QPlainTextEdit, QTextBrowser, QTreeWidget, QTableWidget {
                 background: #FFFFFF; color: #223649;
-                border: 1px solid #D3DEE8; border-radius: 7px;
+                border: 1px solid #B8C2D0; border-radius: 10px;
                 selection-background-color: #C5E4F4;
                 selection-color: #17354B;
             }
             QPlainTextEdit { padding: 8px; }
-            QTabWidget::pane { background: #FFFFFF; border: 1px solid #D3DEE8; border-radius: 7px; }
+            QTabWidget::pane { background: #FFFFFF; border: 1px solid #B8C2D0; border-radius: 10px; }
             QTabBar::tab {
-                background: #E5EDF3; color: #3A5369; padding: 9px 15px;
+                background: #E5EDF3; color: #3A5369; padding: 8px 14px;
                 border-top-left-radius: 7px; border-top-right-radius: 7px;
                 margin-right: 3px; font-weight: 600;
             }
-            QTabBar::tab:selected { background: #B7E5E8; color: #163E50; }
+            QTabBar::tab:selected { background: #B3E3E7; color: #163E50; }
             QTabBar::tab:hover:!selected { background: #D1E6EF; }
             QHeaderView::section {
-                background: #B7C5D5; color: #213547; padding: 8px;
+                background: #B8C2D0; color: #213547; padding: 8px;
                 border: none; border-right: 1px solid #E5EDF3; font-weight: 700;
             }
             QTableWidget { alternate-background-color: #F2F7FB; gridline-color: #E0E8EF; }
-            QTreeWidget::item { padding: 4px; }
+            QTreeWidget { font-family: 'Times New Roman'; font-size: 12pt; }
+            QTableWidget { font-family: 'Times New Roman'; font-size: 11pt; }
+            QTreeWidget { background: #FFFFFF; border: 1px solid #D8E2EC; }
+            QTreeWidget::item { padding: 5px 8px; min-height: 26px; }
+            QTreeWidget::branch { background: #FFFFFF; }
+            QTableWidget { background: #FFFFFF; alternate-background-color: #F3F7FB;
+                gridline-color: #DCE5EB; selection-background-color: #D4E8FB;
+                selection-color: #16344D; }
+            QTableWidget::item { padding: 4px 8px; }
+            QHeaderView::section { background: #E4EDF5; color: #26425A;
+                font-family: 'Times New Roman'; font-size: 11pt; font-weight: 700;
+                border-right: 1px solid #D5E0EB; border-bottom: 1px solid #D5E0EB; padding: 8px; }
+            QPushButton#panelToggleBtn { background: #E8F1F8; color: #28506B;
+                font-family: 'Segoe UI'; font-size: 9pt; font-weight: 600;
+                border: 1px solid #C8DAE7; border-radius: 7px; padding: 5px 10px; }
+            QPushButton#panelToggleBtn:hover { background: #CDE5F3; }
             QTreeWidget::item:selected { background: #D1EAF2; color: #163E50; }
             QSplitter::handle { background: #E0E9F0; }
             QSplitter::handle:hover { background: #B7E5E8; }
@@ -949,9 +1087,10 @@ class Studio(QMainWindow):
         self.dataset_table.setColumnCount(len(columns))
         self.dataset_table.setHorizontalHeaderLabels(columns)
         self.dataset_table.setRowCount(len(rows))
+        self.dataset_table.setVerticalHeaderLabels([str(i + 1) for i in range(len(rows))])
         for r, values in enumerate(rows):
             for c, value in enumerate(values):
-                self.dataset_table.setItem(r, c, QTableWidgetItem(value))
+                self.dataset_table.setItem(r, c, spreadsheet_cell(value))
         self.dataset_table.setSortingEnabled(True)
         self.data_tabs.setTabText(1, name)
         self.data_tabs.setCurrentIndex(1)
